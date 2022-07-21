@@ -35,7 +35,7 @@ export default {
 		const reqUrl = searchParams.get('url')
 
 		//Request URL Check
-		if (reqUrl == null || '' || undefined) {
+		if (reqUrl == null || reqUrl == '' || reqUrl == undefined) {
 			console.error(`No URL Error:`);
 			return new Response("No URL Error", { status: 400 });
 		}
@@ -55,13 +55,14 @@ export default {
 		}
 
 		//Not Media Redirect
-		if (!res.headers.get('content-type')?.startsWith('image/') ||
-			!res.headers.get('content-type')?.startsWith('video/') ||
-			!res.headers.get('content-type')?.startsWith('image/')) {
-			console.warn(`Not Media File [${res.headers.get('content-type')}]: ${reqUrl}`);
-			return Response.redirect(reqUrl, 301);
+		if (res.headers.get('content-type')?.startsWith('image/') ||
+			res.headers.get('content-type')?.startsWith('video/') ||
+			res.headers.get('content-type')?.startsWith('audio/')) {
+			console.error(`Request Success!: ${reqUrl}`);
+			return new Response(await res.blob(), { headers: { 'content-type': `${res.headers.get('content-type')}` } })
+		} else {
+			console.warn(`Unknown Error [${res.headers.get('content-type')}]: ${reqUrl}`);
+			return new Response(`Unknown Error`, { status: 500 });
 		}
-
-		return new Response(await res.blob(), { headers: { 'content-type': `${res.headers.get('content-type') }` } })
 	},
 };
