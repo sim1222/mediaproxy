@@ -28,7 +28,7 @@ export default {
 	): Promise<Response> {
 		//Request Method Check
 		if (request.method !== 'GET') {
-			console.error(`Method Not Allowed [${request.method}]:`);
+			console.warn(`Method Not Allowed [${request.method}]:`);
 			return new Response("Method Not Allowed", { status: 405 });
 		}
 		const { searchParams } = new URL(request.url)
@@ -36,10 +36,31 @@ export default {
 
 		//Request URL Check
 		if (reqUrl == null || reqUrl == '' || reqUrl == undefined) {
-			console.error(`No URL Error:`);
+			console.warn(`No URL Error:`);
 			return new Response("No URL Error", { status: 400 });
 		}
 		
+
+		const cacheUrl = new URL(request.url);
+		const cacheKey = new Request(cacheUrl.toString(), request);
+		const cache = caches.default;
+		//Check Chache
+		const cachedResult = await cache.match(cacheKey);
+		if (cachedResult) {
+			const etag = request.headers.get('If-None-Match');
+			if (etag !== null && etag === cachedResult.headers.get('ETag')) {
+				console.log(`304 Not Modified: ${request.url}`);
+				return new Response(null, {
+					status: 304,
+					headers: cachedResult.headers,
+				})
+			}
+			console.log(`Cache hit for: ${request.url}`);
+			return cachedResult //Cached Response
+		};
+
+
+		//Get Remote
 		const res = await fetch(reqUrl)
 
 		//404
@@ -58,11 +79,22 @@ export default {
 		if (res.headers.get('content-type')?.startsWith('image/') ||
 			res.headers.get('content-type')?.startsWith('video/') ||
 			res.headers.get('content-type')?.startsWith('audio/')) {
-			console.error(`Request Success!: ${reqUrl}`);
-			return new Response(await res.blob(), { headers: { 'content-type': `${res.headers.get('content-type')}` } })
+			console.log(`Request Success!: ${reqUrl}`);
+			const Result = new Response(await res.blob(), {
+				headers: {
+					'Cache-Control': 'max-age=14400',
+					ETag: `W/\"${crypto.randomUUID()}\"`,
+					'content-type': `${res.headers.get('content-type') ?? "application/octet-stream"}`
+				}
+			});
+			//Save Cache
+			console.log(`Saving Cache...: ${reqUrl}`)
+			ctx.waitUntil(cache.put(cacheKey, Result.clone()));
+			return Result;
 		} else {
-			console.warn(`Unknown Error [${res.headers.get('content-type')}]: ${reqUrl}`);
+			console.error(`Unknown Error [${res.headers.get('content-type')}]: ${reqUrl}`);
 			return new Response(`Unknown Error`, { status: 500 });
 		}
+
 	},
 };
