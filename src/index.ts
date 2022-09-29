@@ -39,7 +39,6 @@ export default {
 			console.warn(`No URL Error:`);
 			return new Response("No URL Error", { status: 400 });
 		}
-		
 
 		const cacheUrl = new URL(request.url);
 		const cacheKey = new Request(cacheUrl.toString(), request);
@@ -58,7 +57,6 @@ export default {
 			console.log(`Cache hit for: ${request.url}`);
 			return cachedResult //Cached Response
 		};
-
 
 		//Get Remote
 		const res = await fetch(reqUrl)
@@ -92,8 +90,8 @@ export default {
 			ctx.waitUntil(cache.put(cacheKey, Result.clone()));
 			return Result;
 		} else {
-			console.error(`Unknown Error [${res.headers.get('content-type')}]: ${reqUrl}`);
-			return new Response(`Unknown Error`, { status: 500 });
+			console.error(`Redirecting... [${res.headers.get('content-type')}]: ${reqUrl}`);
+			return Response.redirect(reqUrl, 301);
 		}
 
 	},
