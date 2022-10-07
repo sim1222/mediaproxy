@@ -27,7 +27,7 @@ export default {
 		ctx: ExecutionContext
 	): Promise<Response> {
 		//Request Method Check
-		if (request.method !== 'GET') {
+		if (!(request.method === 'GET' || request.method === 'HEAD')) {
 			console.warn(`Method Not Allowed [${request.method}]:`);
 			return new Response("Method Not Allowed", { status: 405 });
 		}
@@ -43,7 +43,7 @@ export default {
 		const cacheUrl = new URL(request.url);
 		const cacheKey = new Request(cacheUrl.toString(), request);
 		const cache = caches.default;
-		//Check Chache
+		//Check Cache
 		const cachedResult = await cache.match(cacheKey);
 		if (cachedResult) {
 			const etag = request.headers.get('If-None-Match');
@@ -55,44 +55,63 @@ export default {
 				})
 			}
 			console.log(`Cache hit for: ${request.url}`);
+			if (request.method === 'HEAD') {
+				return new Response(null, {
+					status: 200,
+					headers: cachedResult.headers,
+				})
+			}
 			return cachedResult //Cached Response
 		};
 
+		const check = async (res: Response) => {
+			//404
+			if (res.status == 404) {
+				console.warn(`Not Found: ${reqUrl}`);
+				return new Response("Not Found", { status: 404 });
+			}
+
+			//Not 200
+			if (res.status !== 200) {
+				console.warn(`Unknown Status [${res.status}]: ${reqUrl}`);
+				return new Response(`Unknown Status [${res.status}]`, { status: 500 });
+			}
+
+			//Not Media Redirect
+			if (res.headers.get('content-type')?.startsWith('image/') ||
+				res.headers.get('content-type')?.startsWith('video/') ||
+				res.headers.get('content-type')?.startsWith('audio/')) {
+				console.log(`Request Success!: ${reqUrl}`);
+				const Result = new Response(await res.blob(), {
+					headers: {
+						'Cache-Control': 'max-age=14400',
+						ETag: `W/\"${crypto.randomUUID()}\"`,
+						'content-type': res.headers.get('content-type') ?? "application/octet-stream",
+						'Content-Disposition': res.headers.get('Content-Disposition') ?? `inline; filename="${reqUrl.split('/').pop()}"`,
+					}
+				});
+				if (Result.body != null) {
+					//Save Cache
+					console.log(`Saving Cache...: ${reqUrl}`);
+					ctx.waitUntil(cache.put(cacheKey, Result.clone()));
+				}
+				return Result;
+			} else {
+				console.error(`Redirecting... [${res.headers.get('content-type')}]: ${reqUrl}`);
+				return Response.redirect(reqUrl, 301);
+			}
+		}
+
+		if (request.method === 'HEAD') {
+			const res = await fetch(reqUrl, {
+				method: 'HEAD',
+			});
+			return check(res);
+		}
+
 		//Get Remote
 		const res = await fetch(reqUrl)
-
-		//404
-		if (res.status == 404) {
-			console.warn(`Not Found: ${reqUrl}`);
-			return new Response("Not Found", { status: 404 })
-		}
-
-		//Not 200
-		if (res.status !== 200) {
-			console.warn(`Unknown Status [${res.status}]: ${reqUrl}`);
-			return new Response(`Unknown Status [${res.status}]`, { status: 500 })
-		}
-
-		//Not Media Redirect
-		if (res.headers.get('content-type')?.startsWith('image/') ||
-			res.headers.get('content-type')?.startsWith('video/') ||
-			res.headers.get('content-type')?.startsWith('audio/')) {
-			console.log(`Request Success!: ${reqUrl}`);
-			const Result = new Response(await res.blob(), {
-				headers: {
-					'Cache-Control': 'max-age=14400',
-					ETag: `W/\"${crypto.randomUUID()}\"`,
-					'content-type': `${res.headers.get('content-type') ?? "application/octet-stream"}`
-				}
-			});
-			//Save Cache
-			console.log(`Saving Cache...: ${reqUrl}`)
-			ctx.waitUntil(cache.put(cacheKey, Result.clone()));
-			return Result;
-		} else {
-			console.error(`Redirecting... [${res.headers.get('content-type')}]: ${reqUrl}`);
-			return Response.redirect(reqUrl, 301);
-		}
+		return await check(res);
 
 	},
 };
