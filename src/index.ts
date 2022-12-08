@@ -112,7 +112,7 @@ export default {
 		//Get Remote
 		const res = await fetch(reqUrl, {
 			headers: {
-				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 simkey-MediaProxy https://github.com/sim1222/mediaprxy',
+				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 simkey-MediaProxy https://github.com/sim1222/mediaproxy',
 			}
 		})
 		return await check(res);
