@@ -44,7 +44,7 @@ export default {
 		const cacheKey = new Request(cacheUrl.toString(), request);
 		const cache = caches.default;
 		//Check Cache
-		const cachedResult = await cache.match(cacheKey);
+		let cachedResult = await cache.match(cacheKey);
 		if (cachedResult) {
 			const etag = request.headers.get('If-None-Match');
 			if (etag !== null && etag === cachedResult.headers.get('ETag')) {
@@ -89,6 +89,7 @@ export default {
 						ETag: `W/\"${crypto.randomUUID()}\"`,
 						'content-type': res.headers.get('content-type') ?? "application/octet-stream",
 						'Content-Disposition': res.headers.get('Content-Disposition') ?? `inline; filename="${reqUrl.split('/').pop()}"`,
+						'X-Cache': 'MISS',
 					}
 				});
 				if (Result.body != null) {
@@ -96,7 +97,6 @@ export default {
 					console.log(`Saving Cache...: ${reqUrl}`);
 					ctx.waitUntil(cache.put(cacheKey, Result.clone()));
 				}
-				Result.headers.set('X-Cache', 'MISS');
 				return Result;
 			} else {
 				console.error(`Redirecting... [${res.headers.get('content-type')}]: ${reqUrl}`);
