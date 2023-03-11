@@ -61,6 +61,7 @@ export default {
 					headers: cachedResult.headers,
 				})
 			}
+			cachedResult.headers.set('X-Cache', 'HIT');
 			return cachedResult //Cached Response
 		};
 
@@ -95,6 +96,7 @@ export default {
 					console.log(`Saving Cache...: ${reqUrl}`);
 					ctx.waitUntil(cache.put(cacheKey, Result.clone()));
 				}
+				Result.headers.set('X-Cache', 'MISS');
 				return Result;
 			} else {
 				console.error(`Redirecting... [${res.headers.get('content-type')}]: ${reqUrl}`);
