@@ -8,9 +8,11 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
+import { stat } from "fs";
+
 export interface Env {
 	// Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
-	// MY_KV_NAMESPACE: KVNamespace;
+	kv: KVNamespace;
 	//
 	// Example binding to Durable Object. Learn more at https://developers.cloudflare.com/workers/runtime-apis/durable-objects/
 	// MY_DURABLE_OBJECT: DurableObjectNamespace;
@@ -44,7 +46,7 @@ export default {
 		const cacheKey = new Request(cacheUrl.toString(), request);
 		const cache = caches.default;
 		//Check Cache
-		let cachedResult = await cache.match(cacheKey);
+		const cachedResult = await cache.match(cacheKey);
 		if (cachedResult) {
 			const etag = request.headers.get('If-None-Match');
 			if (etag !== null && etag === cachedResult.headers.get('ETag')) {
@@ -61,18 +63,69 @@ export default {
 					headers: cachedResult.headers,
 				})
 			}
-			cachedResult.headers.set('X-Cache', 'HIT');
 			return cachedResult //Cached Response
 		};
 
 		const check = async (res: Response) => {
-			//404
-			if (res.status == 404) {
-				console.warn(`Not Found: ${reqUrl}`);
-				return new Response("Not Found", { status: 404 });
+
+			const status = {
+				// 200: 'OK',
+				// 301: 'Moved Permanently',
+				// 302: 'Found',
+				// 303: 'See Other',
+				// 304: 'Not Modified',
+				// 307: 'Temporary Redirect',
+				// 308: 'Permanent Redirect',
+				// 400: 'Bad Request',
+				// 401: 'Unauthorized',
+				403: 'Forbidden',
+				404: 'Not Found',
+				// 405: 'Method Not Allowed',
+				// 406: 'Not Acceptable',
+				// 408: 'Request Timeout',
+				// 409: 'Conflict',
+				// 410: 'Gone',
+				// 411: 'Length Required',
+				// 412: 'Precondition Failed',
+				// 413: 'Payload Too Large',
+				// 414: 'URI Too Long',
+				// 415: 'Unsupported Media Type',
+				// 416: 'Range Not Satisfiable',
+				// 417: 'Expectation Failed',
+				// 418: 'I\'m a teapot',
+				// 421: 'Misdirected Request',
+				// 422: 'Unprocessable Entity',
+				// 423: 'Locked',
+				// 424: 'Failed Dependency',
+				// 425: 'Too Early',
+				// 426: 'Upgrade Required',
+				// 428: 'Precondition Required',
+				// 429: 'Too Many Requests',
+				// 431: 'Request Header Fields Too Large',
+				// 451: 'Unavailable For Legal Reasons',
+				// 500: 'Internal Server Error',
+				// 501: 'Not Implemented',
+				// 502: 'Bad Gateway',
+				// 503: 'Service Unavailable',
+				// 504: 'Gateway Timeout',
+				// 505: 'HTTP Version Not Supported',
+				// 506: 'Variant Also Negotiates',
+				// 507: 'Insufficient Storage',
+				// 508: 'Loop Detected',
+				// 510: 'Not Extended',
+				// 511: 'Network Authentication Required',
+				522: 'Connection Timed Out',
+				// 524: 'A Timeout Occurred',
+				// 598: 'Network read timeout error',
+				// 599: 'Network connect timeout error'
 			}
 
-			//Not 200
+			if (Object.keys(status).includes(res.status.toString())) { 
+				console.warn(`${status[res.status as keyof typeof status]}: ${reqUrl}`);
+				const img = await env.kv.get(res.status.toString(), 'arrayBuffer');
+				return new Response(img, { status: res.status, headers: { 'content-type': 'image/png' } });
+			}
+
 			if (res.status !== 200) {
 				console.warn(`Unknown Status [${res.status}]: ${reqUrl}`);
 				return new Response(`Unknown Status [${res.status}]`, { status: 500 });
@@ -85,11 +138,11 @@ export default {
 				console.log(`Request Success!: ${reqUrl}`);
 				const Result = new Response(await res.blob(), {
 					headers: {
-						'Cache-Control': 'max-age=14400',
+						'Cache-Control': 'max-age=2678400', //1 Month
 						ETag: `W/\"${crypto.randomUUID()}\"`,
 						'content-type': res.headers.get('content-type') ?? "application/octet-stream",
 						'Content-Disposition': res.headers.get('Content-Disposition') ?? `inline; filename="${reqUrl.split('/').pop()}"`,
-						'X-Cache': 'MISS',
+						'X-Cache': 'HIT',
 					}
 				});
 				if (Result.body != null) {
@@ -97,6 +150,7 @@ export default {
 					console.log(`Saving Cache...: ${reqUrl}`);
 					ctx.waitUntil(cache.put(cacheKey, Result.clone()));
 				}
+				Result.headers.set('X-Cache', 'MISS');
 				return Result;
 			} else {
 				console.error(`Redirecting... [${res.headers.get('content-type')}]: ${reqUrl}`);

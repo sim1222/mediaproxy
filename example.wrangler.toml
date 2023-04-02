@@ -5,5 +5,9 @@ compatibility_date = "2022-07-21"
 account_id = "honi"
 workers_dev = true
 
+kv_namespaces = [
+  { binding = "kv", id = "honi" },
+]
+
 route = "proxy.example.tld/*"
 zone_id = "honi"
